@@ -14,6 +14,15 @@ saves more.
 
 Reply in the user's language. Keep every message to one or two lines.
 
+## 0. Auto mode switch
+
+`/pause auto off` → create the empty file `~/.claude/token-saver/disabled`;
+reply "Auto mode off." `/pause auto on` → delete that file; reply "Auto mode
+on." `/pause auto` → say whether the file exists. Nothing else.
+
+(Auto mode = a hook that makes every turn arm one wake-up 55 min ahead, 2
+pings max. An explicit `/pause <duration>` below overrides it for this break.)
+
 ## 1. Read the duration
 
 Parse `$ARGUMENTS` into minutes. If it says "keep" / "ping", force keep-alive;

@@ -73,6 +73,20 @@ python3 skills/savings/token_saver.py [--days 30] [--cap-hours 3] [--resume-size
 
 Keep-alive uses Claude Code's built-in `/loop` self-paced mode (`ScheduleWakeup`). It is capped at 4 pings and stops at your first message. It is never used in headless (`claude -p`) sessions.
 
+## Auto mode
+
+No need to announce breaks: a `UserPromptSubmit` hook makes every turn arm one wake-up 55 min ahead. If you go quiet, the session pings itself before the 1-hour cache expires, 2 pings max (covers breaks up to ~3 h); any new message re-arms it. Measured on the logs above: **+1 %** net (automatic pings on sessions that never resume included), versus a loss for longer caps. Never runs in `claude -p` / SDK sessions.
+
+- Plugin install: on by default (`hooks/hooks.json`).
+- Short install: add to `~/.claude/settings.json`, under `hooks`:
+  ```json
+  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "timeout": 5,
+    "command": "python3 /path/to/token-saver/hooks/auto_keepalive.py" }] }]
+  ```
+- Off / on: `/pause auto off`, `/pause auto on`.
+
+Limit: a turn that uses no tool does not re-arm; the wake-up armed by an earlier turn still fires.
+
 ## How the numbers are computed
 
 - Source: `~/.claude/projects/**/*.jsonl`, deduplicated per API request. Nothing leaves your machine.
