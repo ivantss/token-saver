@@ -2,6 +2,10 @@
 
 A Claude Code plugin that stops you paying to rebuild the prompt cache after a break.
 
+> **Built for subscription plans (Pro / Max), where Claude Code keeps a 1-hour cache.**
+> On the API (API key, Bedrock, Vertex) the cache lasts 5 minutes: token-saver detects it
+> and switches to its [API mode](#api-mode).
+
 - **`/pause`** — before stepping away: keeps the cache warm for a short break, or writes a handoff note so you can `/clear` and restart light after a long one.
 - **`/savings`** — reads your local Claude Code logs and tells you what cache expiry actually costs you, and which strategy would save the most.
 - **Auto mode** — the same keep-alive, without asking: after each of your messages, a ping is armed 55 min ahead.
@@ -79,6 +83,7 @@ Works on macOS, Linux and Windows. The analyzer also runs on its own (Python 3.8
 
 ```
 python3 skills/savings/token_saver.py [--days 30] [--cap-hours 3] [--resume-size 30000] [--json]
+python3 skills/savings/token_saver.py --api [--read-weight 0.05]   # replay as API billing
 ```
 
 ## Usage
@@ -109,6 +114,33 @@ No need to announce breaks: a `UserPromptSubmit` hook makes every turn arm one w
 Check it works and what it saved: `/savings --check` — per episode, tokens not re-written, pings' cost, net.
 
 Limit: a turn that uses no tool does not re-arm; the wake-up armed by an earlier turn still fires.
+
+## API mode
+
+With an API key (or Bedrock / Vertex), Claude Code uses a **5-minute** cache. The hook
+detects it (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`,
+`CLAUDE_CODE_USE_VERTEX`) and pings every **4.5 min, 3 pings max** (covers ~18 min of silence).
+`/pause` keeps the cache for announced breaks of 5–45 min (≤ 10 pings) and writes a handoff
+note beyond. Force a mode with `TOKEN_SAVER_MODE=plan|api`; `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`
+counts as plan mode.
+
+Same two months of logs, replayed as if billed on the API (`token_saver.py --api`):
+
+| Strategy | Cache read 0.1× | Cache read 0.05× (Opus 5.5) |
+|---|---|---|
+| Auto keep-alive, 1 ping (4.5 min) | +0.8 % | +2.9 % |
+| Auto keep-alive, 2 pings (9 min) | **+1.0 %** | +4.9 % |
+| Auto keep-alive, 3 pings (13.5 min) | +0.4 % | **+5.5 %** |
+| Auto keep-alive, 6 pings (27 min) | −2.9 % | +4.9 % |
+| Auto keep-alive, 12 pings (54 min) | −11.5 % | +0.1 % |
+| `/pause` on announced breaks (upper bound) | +7.7 % | +13.3 % |
+| Handoff + `/clear` on breaks > 1 h | +4.2 % | +5.6 % |
+| Switch to the 1-hour cache (`CLAUDE_CODE_PROMPT_CACHE_TTL=1h`) | −2.9 % | −3.3 % |
+
+(% of the whole API bill for these sessions.) Takeaways: short automatic pings pay a little;
+announcing breaks with `/pause` pays most; the 1-hour cache costs more than it saves, because
+every cache write goes from 1.25× to 2×. The default cap of 3 pings is tuned for Opus 5.5; with
+0.1× reads, 2 is best — run `/savings --api` for your own numbers.
 
 ## How the numbers are computed
 

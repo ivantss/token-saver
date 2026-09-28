@@ -19,6 +19,10 @@ quiet time, and the user's return — "kept" (cache read, tokens saved),
 "none" (never came back). Ends with tokens not re-written and the net saving
 after the pings' own cost.
 
+`--api [--read-weight 0.05]` replays the logs as if billed on the API
+(5-minute cache): auto keep-alive by ping cap, `/pause`, handoff, and the
+1-hour cache option. Use 0.05 for Opus 5.5, 0.1 otherwise.
+
 Options: `--days N` (last N days), `--cap-hours H`, `--resume-size T`,
 `--json`. It reads `~/.claude/projects/**/*.jsonl` locally; nothing is sent
 anywhere. It can take ~20 s on large histories.

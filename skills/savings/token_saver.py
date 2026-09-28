@@ -314,6 +314,115 @@ def check(root, days):
     return "\n".join(lines)
 
 
+API_TTL = 5                      # Claude Code with an API key: 5-minute cache
+API_PING = API_TTL * PING_MARGIN  # ping every 4.5 min
+API_CAPS = (1, 2, 3, 4, 6, 8, 12)
+
+
+def api_simulate(root, days, resume_size, now=None):
+    """Replay the logged sessions as if billed on the API (5-minute cache).
+
+    Every quiet period over 5 min before a typed prompt costs a rewrite
+    (x1.25 instead of x0.1). Strategies compared, in input-token equivalents:
+      auto K     after each turn, ping every 4.5 min, K pings max (also fires
+                 on sessions that never resume);
+      announced  ping only the pauses you came back from, if it pays (bound);
+      handoff    over 1 h of pause: resume from a small context instead;
+      ttl_1h     1-hour cache on the API: every cache write costs x2, auto 2 pings.
+    Recorded keep-alive pings are removed first: the replay decides the pings.
+    """
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(days=days) if days else datetime.min.replace(tzinfo=timezone.utc)
+    base = w1h = 0.0
+    returns, tails = [], []
+    n_sessions = n_calls = 0
+    for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
+        if days and os.path.getmtime(path) < since.timestamp():
+            continue
+        try:
+            calls = [c for c in _session_events(path) if c["t"] >= since and c["trigger"] != "ping"]
+        except OSError:
+            continue
+        if not calls:
+            continue
+        n_sessions += 1
+        interactive = "subagents" not in path
+        prev = None
+        for c in calls:
+            n_calls += 1
+            fixed = c["inp"] + W_OUT * c["out"]
+            base += fixed + W_WRITE[5] * c["write"] + W_READ * c["read"]
+            w1h += fixed + W_WRITE[60] * c["write"] + W_READ * c["read"]
+            if prev is not None and c["trigger"] == "user":
+                gap = (c["t"] - prev).total_seconds() / 60
+                size = c["read"] + c["write"] + c["inp"]
+                if gap > API_TTL and c["read"] >= c["write"]:
+                    # cached in the logs (1-h TTL) but expired on a 5-min cache
+                    base += (W_WRITE[5] - W_READ) * c["read"]
+                if gap > API_TTL and size > MIN_REWRITE:
+                    returns.append(dict(gap=gap, size=size, interactive=interactive))
+            prev = c["t"]
+        if interactive:
+            last = calls[-1]
+            tails.append(dict(t=last["t"], size=last["read"] + last["write"] + last["inp"]))
+
+    hold = W_WRITE[5] - W_READ                     # 1.15 C saved when the cache holds
+    auto = {}
+    for k in API_CAPS:
+        g = 0.0
+        for r in returns:
+            if not r["interactive"]:
+                continue
+            n = int(r["gap"] // API_PING)
+            g += hold * r["size"] - n * W_READ * r["size"] if n <= k else -k * W_READ * r["size"]
+        for s in tails:
+            if (now - s["t"]).total_seconds() / 60 > k * API_PING:
+                g -= k * W_READ * s["size"]
+        auto[k] = g
+    announced = sum(max(0.0, hold * r["size"] - int(r["gap"] // API_PING) * W_READ * r["size"])
+                    for r in returns if r["interactive"])
+    handoff = sum(max(0, r["size"] - resume_size) * W_WRITE[5]
+                  for r in returns if r["interactive"] and r["gap"] > 60)
+    by_gap = collections.Counter()
+    for r in returns:
+        g = r["gap"]
+        by_gap["5-15m" if g < 15 else "15-60m" if g < 60 else "1-3h" if g < 180 else ">3h"] += 1
+    best = max(auto, key=auto.get)
+    pct = lambda x: round(100 * x / base, 1) if base else 0.0
+    return {
+        "sessions": n_sessions, "api_calls": n_calls,
+        "baseline_weighted": round(base),
+        "returns_after_5min": len(returns), "returns_by_pause": dict(by_gap),
+        "auto": {k: {"weighted_saving": round(v), "pct": pct(v)} for k, v in auto.items()},
+        "best_cap": best,
+        "announced": {"weighted_saving": round(announced), "pct": pct(announced)},
+        "handoff_over_1h": {"weighted_saving": round(handoff), "pct": pct(handoff),
+                            "resume_size": resume_size},
+        "ttl_1h": {"weighted_saving": round(base - w1h), "pct": pct(base - w1h)},
+    }
+
+
+def api_report(r):
+    out = [f"API replay (5-min cache)  {r['sessions']} sessions, {r['api_calls']} API calls",
+           f"Baseline     {fmt(r['baseline_weighted'])} weighted tokens, "
+           f"{r['returns_after_5min']} returns after > 5 min "
+           + "(" + ", ".join(f"{k} {v}" for k, v in r["returns_by_pause"].items()) + ")",
+           "",
+           "Saving vs baseline (+ = cheaper):",
+           f"  {'auto keep-alive, ping every 4.5 min':40} "]
+    for k, v in r["auto"].items():
+        mark = "  <- best" if k == r["best_cap"] else ""
+        out.append(f"    cap {k:2} pings ({k * API_PING:4.1f} min)            "
+                   f"{fmt(v['weighted_saving']):>7}  ({v['pct']:+.1f} %){mark}")
+    out += [f"  {'announced pauses only (upper bound)':40}{fmt(r['announced']['weighted_saving']):>7}"
+            f"  ({r['announced']['pct']:+.1f} %)",
+            f"  {'handoff + /clear, pauses > 1 h':40}{fmt(r['handoff_over_1h']['weighted_saving']):>7}"
+            f"  ({r['handoff_over_1h']['pct']:+.1f} %)",
+            f"  {'1-hour cache (writes x2)':40}{fmt(r['ttl_1h']['weighted_saving']):>7}"
+            f"  ({r['ttl_1h']['pct']:+.1f} %)"]
+    return "\n".join(out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--projects-dir", default=os.path.expanduser("~/.claude/projects"))
@@ -323,11 +432,21 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--check", action="store_true",
                     help="show recent keep-alive pings and whether the cache was kept")
+    ap.add_argument("--read-weight", type=float, default=0.1,
+                    help="cache read price vs input (0.1; 0.05 on Opus 5.5)")
+    ap.add_argument("--api", action="store_true",
+                    help="replay the logs as if billed on the API (5-minute cache)")
     a = ap.parse_args(argv)
+    global W_READ
+    W_READ = a.read_weight
     if not os.path.isdir(a.projects_dir):
         sys.exit(f"no Claude Code logs at {a.projects_dir}")
     if a.check:
         print(check(a.projects_dir, a.days))
+        return
+    if a.api:
+        r = api_simulate(a.projects_dir, a.days, a.resume_size)
+        print(json.dumps(r, indent=2) if a.json else api_report(r))
         return
     r = analyze(a.projects_dir, a.days, a.cap_hours, a.resume_size)
     print(json.dumps(r, indent=2) if a.json else report(r))

@@ -6,14 +6,37 @@ arm one wake-up 55 min ahead. If the user goes quiet, the wake-up pings the
 session (a cache read, ~0.1x) before the 1-hour cache expires; after 2 pings
 it stops. Any new prompt re-arms from zero.
 
+Two modes, picked from the environment:
+  plan  subscription (Pro/Max), 1-hour cache: ping every 55 min, 2 pings max;
+  api   API key, Bedrock or Vertex, 5-minute cache: ping every 4.5 min, 3 pings
+        max (best cap replayed on real logs: `token_saver.py --api`).
+Force one with TOKEN_SAVER_MODE=plan|api.
+
 Off switch: the file ~/.claude/token-saver/disabled (see `/pause auto off`).
 """
 import json
 import os
 import sys
 
-PINGS = 2          # best cap measured on real logs: covers pauses up to ~3 h
-DELAY = 3300       # 55 min, inside the 1-hour cache TTL
+MODES = {                  # (pings, delay in seconds)
+    "plan": (2, 3300),     # 55 min inside a 1-hour cache; covers pauses up to ~3 h
+    "api": (3, 270),       # 4.5 min inside a 5-minute cache; covers pauses up to ~18 min
+}
+API_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+            "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+
+
+def mode():
+    env = os.environ
+    forced = env.get("TOKEN_SAVER_MODE", "").lower()
+    if forced in MODES:
+        return forced
+    if env.get("CLAUDE_CODE_PROMPT_CACHE_TTL", "").lower() == "1h":
+        return "plan"
+    return "api" if any(env.get(k) for k in API_VARS) else "plan"
+
+
+PINGS, DELAY = MODES[mode()]
 
 REMINDER = (
     "[token-saver auto mode] In your first batch of tool calls this turn, also call "
