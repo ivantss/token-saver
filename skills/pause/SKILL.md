@@ -21,6 +21,11 @@ Reply in the user's language. Keep every message to one or two lines.
 reply "Auto mode off." `/pause auto on` → delete that file; reply "Auto mode
 on." `/pause auto` → say whether the file exists. Nothing else.
 
+`/pause mode plan` or `/pause mode api` → write that word to
+`~/.claude/token-saver/mode`; reply "Mode forced: plan|api." `/pause mode
+detect` → delete that file; reply "Mode: detected again." `/pause mode` → say
+the forced mode, or "detected" if the file does not exist. Nothing else.
+
 (Auto mode = a hook that makes every turn arm one wake-up: 55 min ahead, 2
 pings max, on a subscription; 4.5 min ahead, 3 pings max, on the API. An explicit `/pause <duration>` below overrides it for this break.)
 
@@ -44,6 +49,7 @@ The `ScheduleWakeup` tool description states the session's prompt-cache TTL.
 - **1 hour** (subscription plans, or API with `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`):
   plan table, ping interval D = 3300 s.
 - **5 minutes** (API key, Bedrock, Vertex): API table, D = 270 s.
+- If `~/.claude/token-saver/mode` holds `plan` or `api`, use that table.
 - Unknown: ask nothing, use the API table.
 
 Plan table (1-hour cache):

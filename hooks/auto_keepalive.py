@@ -10,7 +10,8 @@ Two modes, picked from the environment:
   plan  subscription (Pro/Max), 1-hour cache: ping every 55 min, 2 pings max;
   api   API key, Bedrock or Vertex, 5-minute cache: ping every 4.5 min, 3 pings
         max (best cap replayed on real logs: `token_saver.py --api`).
-Force one with TOKEN_SAVER_MODE=plan|api.
+Force one with `/pause mode plan|api` (file ~/.claude/token-saver/mode) or
+TOKEN_SAVER_MODE=plan|api; `/pause mode detect` goes back to detection.
 
 Off switch: the file ~/.claude/token-saver/disabled (see `/pause auto off`).
 """
@@ -26,9 +27,19 @@ API_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
             "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
 
 
+MODE_FILE = os.path.join(os.path.expanduser("~"), ".claude", "token-saver", "mode")
+
+
 def mode():
     env = os.environ
     forced = env.get("TOKEN_SAVER_MODE", "").lower()
+    if forced in MODES:
+        return forced
+    try:                               # set by `/pause mode plan|api`, removed by `/pause mode detect`
+        with open(MODE_FILE, encoding="utf-8") as fh:
+            forced = fh.read().strip().lower()
+    except OSError:
+        forced = ""
     if forced in MODES:
         return forced
     if env.get("CLAUDE_CODE_PROMPT_CACHE_TTL", "").lower() == "1h":

@@ -19,7 +19,17 @@ Claude Code's cache does not last the same time depending on how you pay. token-
 | What you save | usage-limit headroom | money |
 | Measured gain, auto mode | +1 % | +1 % to +5.5 % (depends on the model) |
 
-Detection: API mode is on when `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or `CLAUDE_CODE_USE_VERTEX` is set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`. Otherwise, subscription mode. Force one with `TOKEN_SAVER_MODE=plan` or `TOKEN_SAVER_MODE=api`.
+Detection: API mode is on when `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or `CLAUDE_CODE_USE_VERTEX` is set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`. Otherwise, subscription mode. Commands:
+
+| Command | Effect |
+|---|---|
+| `/pause mode plan` | force subscription mode |
+| `/pause mode api` | force API mode |
+| `/pause mode detect` | back to automatic detection (default) |
+| `/pause mode` | show the current mode |
+| `/pause auto off` / `/pause auto on` | turn auto mode (the automatic pings) off / back on |
+
+The environment variable `TOKEN_SAVER_MODE=plan|api` also forces a mode; it wins over `/pause mode`. Remove it to go back to detection.
 
 ## The problem
 
@@ -60,7 +70,7 @@ Auto mode:
   "UserPromptSubmit": [{ "hooks": [{ "type": "command", "timeout": 5,
     "command": "python3 /path/to/token-saver/hooks/auto_keepalive.py" }] }]
   ```
-- Off / on: `/pause auto off`, `/pause auto on`.
+- Off / on: `/pause auto off`, `/pause auto on`. An explicit `/pause <duration>` overrides it for one break only; your next message re-arms auto mode.
 
 Works on macOS, Linux and Windows. The analyzer also runs on its own (Python 3.8+, standard library only; on Windows use `python` or `py`):
 
