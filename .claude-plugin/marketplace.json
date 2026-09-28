@@ -1,0 +1,11 @@
+{
+  "name": "token-saver",
+  "owner": { "name": "Ivan Toussaint" },
+  "plugins": [
+    {
+      "name": "token-saver",
+      "source": "./",
+      "description": "/pause and /savings: keep the prompt cache warm during short breaks, hand off cleanly before long ones, and measure the difference."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "token-saver",
+  "version": "0.1.0",
+  "description": "Stop paying to rebuild Claude Code's prompt cache after a break: /pause keeps it warm or hands off to a fresh session; /savings measures what cache expiry costs you.",
+  "author": { "name": "Ivan Toussaint" },
+  "repository": "https://github.com/ivantss/token-saver",
+  "license": "MIT",
+  "keywords": ["cache", "tokens", "cost", "prompt-caching", "pause"]
+}
