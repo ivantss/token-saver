@@ -38,12 +38,21 @@ Run `/savings` to get your own numbers.
 
 ## Install
 
+**Short commands (`/pause`, `/savings`)** — copy the skills into `~/.claude/skills/`:
+
+```
+git clone https://github.com/ivantss/token-saver
+python3 token-saver/install.py        # Windows: python or py
+```
+
+**Or as a plugin** — commands get the plugin prefix (`/token-saver:pause`, `/token-saver:savings`); Claude Code always namespaces plugin commands:
+
 ```
 /plugin marketplace add ivantss/token-saver
 /plugin install token-saver@token-saver
 ```
 
-Restart Claude Code, then `/token-saver:pause` and `/token-saver:savings` are available (or just say "pause for 2h").
+Restart Claude Code after either. You can also just say "pause for 2h".
 
 Works on macOS, Linux and Windows. The analyzer also runs on its own (Python 3.8+, standard library only; on Windows use `python` or `py`):
 
@@ -54,11 +63,13 @@ python3 skills/savings/token_saver.py [--days 30] [--cap-hours 3] [--resume-size
 ## Usage
 
 ```
-/token-saver:pause 45m      # cache holds, nothing to do
-/token-saver:pause 2h       # 3 keep-alive pings, stops as soon as you type
-/token-saver:pause tonight  # handoff note in ~/.claude/handoffs/, then /clear
-/token-saver:pause          # asks you
+/pause 45m      # cache holds, nothing to do
+/pause 2h       # 3 keep-alive pings, stops as soon as you type
+/pause tonight  # handoff note in ~/.claude/handoffs/, then /clear
+/pause          # asks you
 ```
+
+(Installed as a plugin: `/token-saver:pause`, `/token-saver:savings`.)
 
 Keep-alive uses Claude Code's built-in `/loop` self-paced mode (`ScheduleWakeup`). It is capped at 4 pings and stops at your first message. It is never used in headless (`claude -p`) sessions.
 
