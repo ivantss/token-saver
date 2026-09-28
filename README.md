@@ -12,9 +12,12 @@ Take a 400k-token session and a 1 h 30 coffee-and-meeting break.
 
 | | Without token-saver | With auto mode |
 |---|---|---|
+| Before the break | context already in cache | same — already paid, identical on both sides |
 | During the break | nothing | 1 ping = 400k read from cache ×0.1 = **40k** |
 | First turn back | cache expired → 400k re-written ×2 = **800k** | cache still warm → 400k read ×0.1 = **40k** |
-| Total | **800k** | **80k** |
+| Cost of the break | **800k** | **80k** |
+
+(Weighted tokens, relative to one uncached input token. The session's cost before the break is the same in both columns, so it is left out.)
 
 One break, 10× cheaper. On a subscription, that is usage-limit headroom you get back; on the API, money.
 
