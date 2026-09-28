@@ -4,6 +4,24 @@ A Claude Code plugin that stops you paying to rebuild the prompt cache after a b
 
 - **`/pause`** — before stepping away: keeps the cache warm for a short break, or writes a handoff note so you can `/clear` and restart light after a long one.
 - **`/savings`** — reads your local Claude Code logs and tells you what cache expiry actually costs you, and which strategy would save the most.
+- **Auto mode** — the same keep-alive, without asking: after each of your messages, a ping is armed 55 min ahead.
+
+## Why it's worth it
+
+Take a 400k-token session and a 1 h 30 coffee-and-meeting break.
+
+| | Without token-saver | With auto mode |
+|---|---|---|
+| During the break | nothing | 1 ping = 400k read from cache ×0.1 = **40k** |
+| First turn back | cache expired → 400k re-written ×2 = **800k** | cache still warm → 400k read ×0.1 = **40k** |
+| Total | **800k** | **80k** |
+
+One break, 10× cheaper. On a subscription, that is usage-limit headroom you get back; on the API, money.
+
+- **You don't have to think about it.** Nobody types `/pause` before a meeting. Auto mode arms the ping for you and stops by itself (2 pings max, ~3 h), so a session you abandon costs at most two cheap reads.
+- **It never pings for nothing when you're active.** Every message re-arms the timer; pings only fire after 55 min of silence.
+- **You can see what it saved.** `/savings --check` lists each break, whether the cache was kept, the tokens not re-written, and the net gain after the pings' own cost. No guessing.
+- **Its limits are measured, not assumed.** On two months of real logs, pinging longer than ~3 h, or every session blindly, loses tokens — that's why the caps are where they are. For long breaks, `/pause tonight` writes a handoff note and you restart light with `/clear`.
 
 ## The problem
 
