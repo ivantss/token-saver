@@ -215,6 +215,52 @@ def report(r):
     return "\n".join(out)
 
 
+def check(root, days):
+    """List recent keep-alive pings and whether they kept the cache.
+
+    A ping (or the user's return after it) kept the cache when its first API
+    call read the context from cache instead of re-writing it.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days or 2)
+    rows = []
+    for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
+        if os.path.getmtime(path) < since.timestamp():
+            continue
+        pending = None
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                m = d.get("message") or {}
+                if d.get("type") == "user" and m.get("role") == "user":
+                    c = m.get("content")
+                    text = c if isinstance(c, str) else " ".join(
+                        b.get("text", "") for b in c if isinstance(b, dict)) if isinstance(c, list) else ""
+                    if "tool_result" in line and not isinstance(c, str):
+                        continue
+                    kind = "ping" if text.strip().startswith(
+                        ("cache-keepalive", "pause-ping", "/loop pause-ping")) else "user"
+                    if kind == "ping" or (pending and pending[0] == "ping-seen"):
+                        pending = (kind, d.get("timestamp"))
+                    continue
+                u = m.get("usage")
+                if u and pending and pending[0] in ("ping", "user"):
+                    w = u.get("cache_creation_input_tokens") or 0
+                    r = u.get("cache_read_input_tokens") or 0
+                    rows.append((pending[1], pending[0] if pending[0] == "ping" else "return",
+                                 os.path.basename(path)[:8], r, w, "kept" if r > w else "REWRITTEN"))
+                    pending = ("ping-seen", None) if pending[0] == "ping" else None
+    rows.sort()
+    if not rows:
+        return "No keep-alive ping found in the last %d day(s)." % (days or 2)
+    lines = [f"{'time (UTC)':19}  {'event':6}  session   {'cache read':>10}  {'written':>8}  result"]
+    for t, ev, sid, r, w, res in rows:
+        lines.append(f"{(t or '')[:19]:19}  {ev:6}  {sid}  {fmt(r):>10}  {fmt(w):>8}  {res}")
+    return "\n".join(lines)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--projects-dir", default=os.path.expanduser("~/.claude/projects"))
@@ -222,9 +268,14 @@ def main(argv=None):
     ap.add_argument("--cap-hours", type=float, default=3, help="ping cap for the automatic strategy")
     ap.add_argument("--resume-size", type=int, default=30_000, help="context size after handoff + /clear")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="show recent keep-alive pings and whether the cache was kept")
     a = ap.parse_args(argv)
     if not os.path.isdir(a.projects_dir):
         sys.exit(f"no Claude Code logs at {a.projects_dir}")
+    if a.check:
+        print(check(a.projects_dir, a.days))
+        return
     r = analyze(a.projects_dir, a.days, a.cap_hours, a.resume_size)
     print(json.dumps(r, indent=2) if a.json else report(r))
 

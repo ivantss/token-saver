@@ -13,6 +13,9 @@ python3 <base directory>/token_saver.py $ARGUMENTS
 
 On Windows, use `python` or `py` if `python3` is not found.
 
+`--check` lists recent keep-alive pings and whether each one (and the user's
+return after it) read the cache ("kept") or re-wrote it ("REWRITTEN").
+
 Options: `--days N` (last N days), `--cap-hours H`, `--resume-size T`,
 `--json`. It reads `~/.claude/projects/**/*.jsonl` locally; nothing is sent
 anywhere. It can take ~20 s on large histories.
