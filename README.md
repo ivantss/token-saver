@@ -202,6 +202,31 @@ Takeaways:
 - Switching the API to the 1-hour cache costs more than it saves: every cache write goes from 1.25× to 2×, not only the ones after a break.
 - The default cap of 3 pings is tuned for Opus 5.5. With 0.1× reads, 2 pings is best. Run `/savings --api` (add `--read-weight 0.05` for Opus 5.5) for your own numbers.
 
+### What it could save a company
+
+The percentages above applied to a monthly API spend on **interactive** Claude Code. Range: from models with 0.1× cache reads to Opus 5.5 (0.05×).
+
+| Monthly spend | A. Auto mode only (1 – 5.5 %) | B. Auto + nightly handoff (5 – 11 %) | C. Announced breaks + handoff (12 – 19 %, ceiling) |
+|---|---|---|---|
+| $10k | $100 – 550 | $500 – 1,100 | $1,200 – 1,900 |
+| $50k | $500 – 2,750 | $2,500 – 5,500 | $6,000 – 9,500 |
+| $100k | $1k – 5.5k | $5k – 11k | $12k – 19k |
+| $500k | $5k – 27.5k | $25k – 55k | $60k – 95k |
+| $1M | $10k – 55k | $50k – 110k | $120k – 190k |
+
+Per year: × 12 (at $100k/month, scenario B ≈ $60k – 130k).
+
+- **A** — nothing to do: the hook.
+- **B** — A + `pause_all.py` (or `/pause tonight`) every evening. The two measured gains are added, not simulated together; they cover different pauses (< 15 min for pings, > 1 h for notes).
+- **C** — everyone announces every break with `/pause`: a ceiling.
+
+Limits:
+- One measured profile (many tabs, long breaks). A team working without long gaps saves less.
+- Only interactive Claude Code gains. Headless jobs (`claude -p`), CI and direct API calls do not: apply the % to that share of the bill, not to the total.
+- `pause_all.py` is macOS + iTerm2 only; elsewhere, `/pause tonight` by hand.
+
+For real numbers, each developer runs `token_saver.py --api` (`--read-weight 0.05` on Opus 5.5).
+
 ---
 
 ## How the numbers are computed
