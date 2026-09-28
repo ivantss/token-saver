@@ -215,49 +215,102 @@ def report(r):
     return "\n".join(out)
 
 
-def check(root, days):
-    """List recent keep-alive pings and whether they kept the cache.
+PING_PREFIXES = ("cache-keepalive", "pause-ping", "/loop pause-ping")
 
-    A ping (or the user's return after it) kept the cache when its first API
-    call read the context from cache instead of re-writing it.
-    """
-    since = datetime.now(timezone.utc) - timedelta(days=days or 2)
-    rows = []
-    for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
-        if os.path.getmtime(path) < since.timestamp():
-            continue
-        pending = None
-        with open(path, encoding="utf-8", errors="ignore") as fh:
-            for line in fh:
-                try:
-                    d = json.loads(line)
-                except ValueError:
-                    continue
-                m = d.get("message") or {}
-                if d.get("type") == "user" and m.get("role") == "user":
-                    c = m.get("content")
-                    text = c if isinstance(c, str) else " ".join(
-                        b.get("text", "") for b in c if isinstance(b, dict)) if isinstance(c, list) else ""
-                    if "tool_result" in line and not isinstance(c, str):
+
+def _session_events(path):
+    """Chronological API calls of one session, each tagged with what triggered
+    it: 'user' (a typed prompt), 'ping' (a keep-alive wake-up) or 'tool'."""
+    seen, calls, trigger = set(), [], "user"
+    with open(path, encoding="utf-8", errors="ignore") as fh:
+        for line in fh:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            m = d.get("message") or {}
+            if d.get("type") == "user" and m.get("role") == "user":
+                c = m.get("content")
+                if isinstance(c, list):
+                    if any(isinstance(x, dict) and x.get("type") == "tool_result" for x in c):
                         continue
-                    kind = "ping" if text.strip().startswith(
-                        ("cache-keepalive", "pause-ping", "/loop pause-ping")) else "user"
-                    if kind == "ping" or (pending and pending[0] == "ping-seen"):
-                        pending = (kind, d.get("timestamp"))
-                    continue
-                u = m.get("usage")
-                if u and pending and pending[0] in ("ping", "user"):
-                    w = u.get("cache_creation_input_tokens") or 0
-                    r = u.get("cache_read_input_tokens") or 0
-                    rows.append((pending[1], pending[0] if pending[0] == "ping" else "return",
-                                 os.path.basename(path)[:8], r, w, "kept" if r > w else "REWRITTEN"))
-                    pending = ("ping-seen", None) if pending[0] == "ping" else None
-    rows.sort()
-    if not rows:
-        return "No keep-alive ping found in the last %d day(s)." % (days or 2)
-    lines = [f"{'time (UTC)':19}  {'event':6}  session   {'cache read':>10}  {'written':>8}  result"]
-    for t, ev, sid, r, w, res in rows:
-        lines.append(f"{(t or '')[:19]:19}  {ev:6}  {sid}  {fmt(r):>10}  {fmt(w):>8}  {res}")
+                    c = " ".join(x.get("text", "") for x in c if isinstance(x, dict))
+                trigger = "ping" if (c or "").strip().startswith(PING_PREFIXES) else "user"
+                continue
+            u, ts = m.get("usage"), d.get("timestamp")
+            if not u or not ts:
+                continue
+            key = (m.get("id"), d.get("requestId"))
+            if key in seen:
+                continue
+            seen.add(key)
+            cc = u.get("cache_creation") or {}
+            w = u.get("cache_creation_input_tokens") or 0
+            w1 = cc.get("ephemeral_1h_input_tokens") or 0
+            calls.append(dict(t=parse_ts(ts), trigger=trigger, read=u.get("cache_read_input_tokens") or 0,
+                              write=w, ttl=60 if w1 >= w - w1 else 5,
+                              inp=u.get("input_tokens") or 0, out=u.get("output_tokens") or 0))
+            trigger = "tool"
+    return calls
+
+
+def check(root, days):
+    """Keep-alive pings in the last N days, and the tokens they saved.
+
+    An episode = the pings after a quiet period + the user's return (if any).
+    Saved: the return read the context from cache although the quiet period
+    exceeded the TTL, so the context was not re-written (x2 -> x0.1).
+    Cost: every ping call (cache read x0.1, small writes, output).
+    """
+    days = days or 7
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    episodes = []
+    for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
+        if os.path.getmtime(path) < since.timestamp() or "subagents" in path:
+            continue
+        calls = [c for c in _session_events(path) if c["t"] >= since]
+        ep = None
+        for i, c in enumerate(calls):
+            if c["trigger"] == "ping":
+                if ep is None:
+                    ep = dict(session=os.path.basename(path)[:8], start=c["t"],
+                              quiet_from=calls[i - 1]["t"] if i else c["t"],
+                              pings=0, cost=0.0, ret=None)
+                    episodes.append(ep)
+                ep["pings"] += 1
+                ep["cost"] += (c["inp"] + W_READ * c["read"] + W_WRITE[c["ttl"]] * c["write"]
+                               + W_OUT * c["out"])
+            elif c["trigger"] == "user" and ep is not None:
+                ep["ret"] = c
+                ep = None
+    if not episodes:
+        return f"No keep-alive ping found in the last {days} day(s)."
+    lines = [f"{'first ping (UTC)':16}  session   pings  {'quiet':>6}  {'return':10}  "
+             f"{'not rewritten':>13}  {'saved':>8}  {'cost':>7}"]
+    tot_raw = tot_saved = tot_cost = 0.0
+    for e in sorted(episodes, key=lambda e: e["start"]):
+        r = e["ret"]
+        end = r["t"] if r else None
+        quiet = ((end - e["quiet_from"]).total_seconds() / 60) if end else None
+        raw = saved = 0
+        if r is None:
+            status = "none"
+        elif r["read"] < r["write"]:
+            status = "REWRITTEN"
+        elif quiet <= r["ttl"]:
+            status = "not needed"
+        else:
+            status = "kept"
+            raw = r["read"]
+            saved = raw * (W_WRITE[r["ttl"]] - W_READ)
+        tot_raw += raw; tot_saved += saved; tot_cost += e["cost"]
+        q = f"{quiet:.0f}m" if quiet is not None else "-"
+        lines.append(f"{e['start'].isoformat()[:16]:16}  {e['session']}  {e['pings']:5}  {q:>6}  "
+                     f"{status:10}  {fmt(raw):>13}  {fmt(saved):>8}  {fmt(e['cost']):>7}")
+    lines += ["",
+              f"Tokens not re-written: {fmt(tot_raw)}",
+              f"Weighted: saved {fmt(tot_saved)} - pings {fmt(tot_cost)} = net {fmt(tot_saved - tot_cost)}"
+              " (input-token equivalents)"]
     return "\n".join(lines)
 
 

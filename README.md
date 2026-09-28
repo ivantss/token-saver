@@ -85,6 +85,8 @@ No need to announce breaks: a `UserPromptSubmit` hook makes every turn arm one w
   ```
 - Off / on: `/pause auto off`, `/pause auto on`.
 
+Check it works and what it saved: `/savings --check` — per episode, tokens not re-written, pings' cost, net.
+
 Limit: a turn that uses no tool does not re-arm; the wake-up armed by an earlier turn still fires.
 
 ## How the numbers are computed
