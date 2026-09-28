@@ -50,7 +50,7 @@ def load_sessions(root):
     for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
         seen, calls, interactive = set(), [], True
         try:
-            with open(path, errors="ignore") as fh:
+            with open(path, encoding="utf-8", errors="ignore") as fh:
                 for line in fh:
                     if '"usage"' not in line:
                         continue

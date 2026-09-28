@@ -45,7 +45,7 @@ Run `/savings` to get your own numbers.
 
 Restart Claude Code, then `/token-saver:pause` and `/token-saver:savings` are available (or just say "pause for 2h").
 
-The analyzer also runs on its own (Python 3.8+, standard library only):
+Works on macOS, Linux and Windows. The analyzer also runs on its own (Python 3.8+, standard library only; on Windows use `python` or `py`):
 
 ```
 python3 skills/savings/token_saver.py [--days 30] [--cap-hours 3] [--resume-size 30000] [--json]
