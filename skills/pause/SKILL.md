@@ -88,7 +88,10 @@ that /pause does not apply.
 
 ## 3b. Handoff note + /clear
 
-1. Write `~/.claude/handoffs/YYYY-MM-DD-HHMM-<topic>.md` (≤ 60 lines). Use
+1. Write `~/.claude/handoffs/YYYY-MM-DD-HHMM-<topic>.md` (≤ 60 lines). If
+   `$ARGUMENTS` contains `tag=<id>` (sent by `pause_all.py`), name it
+   `YYYY-MM-DD-HHMM-<topic>-<id>.md`, ask nothing, and end the turn right
+   after writing it: the script types `/clear` itself. Use
    only what is already in the conversation — do not read files to write it.
    - **Task**: one sentence.
    - **Working directory**.

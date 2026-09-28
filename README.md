@@ -134,6 +134,23 @@ Auto mode with its 2-ping cap: **+1 %** net (automatic pings on sessions that ne
 
 Takeaways: cache expiry costs a few percent; the handoff beats pinging on long breaks; and the biggest line by far is **context size × number of turns** — keep sessions small. Run `/savings` to get your own numbers.
 
+### End of day: every tab at once (macOS + iTerm2)
+
+For the night, a handoff note beats any ping (a 400k session: 800k re-written tomorrow, or ~60k to restart from the note). `bin/pause_all.py` does it in every iTerm2 tab running Claude Code:
+
+```
+python3 bin/pause_all.py --dry-run   # list the tabs and what would happen
+python3 bin/pause_all.py             # do it
+```
+
+For each tab idle at an empty prompt, it types `/pause tonight tag=<id>`, waits for the note, types `/clear`, then **pre-fills (without sending) the morning message**: "Resume after the break: read ~/.claude/handoffs/…md, sum up in two lines where we were, then go on with the next action." In the morning, press Enter in each tab. Nothing to look up.
+
+Safety:
+- Skipped and listed: busy tabs, tabs with a question or permission dialog open, tabs with a draft in the input (a greyed prompt suggestion is told apart by typing one character and erasing it), the tab running the script.
+- Tabs whose cache already expired are skipped by default: the note would cost a full re-write tonight. `--all` includes them. Tabs under 40k tokens are skipped (`--min-context`).
+- `/clear` is sent only once the note exists; after 8 min without a note, the tab is left as is. The old conversation stays reachable with `claude --resume`.
+- At most 6 notes at a time (`--concurrency`, max 10). Morning message in French if `LANG` is French (`--lang fr|en`).
+
 ---
 
 ## Approach 2 — API (key, Bedrock, Vertex)
