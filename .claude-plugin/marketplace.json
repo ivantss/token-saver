@@ -1,6 +1,11 @@
 {
   "name": "token-saver",
-  "owner": { "name": "Ivan Toussaint" },
+  "owner": {
+    "name": "Ivan Toussaint"
+  },
+  "metadata": {
+    "description": "Claude Code prompt-cache tools: /pause and /savings."
+  },
   "plugins": [
     {
       "name": "token-saver",
